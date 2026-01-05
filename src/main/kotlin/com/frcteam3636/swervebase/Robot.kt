@@ -160,6 +160,11 @@ object Robot : LoggedRobot() {
             Drivetrain.zeroGyro()
         }).ignoringDisable(true))
 
+        joystickRight.button(1).whileTrue(
+            //Use different logic if there's more than one pose we want to align to
+            Drivetrain.driveToPose(Drivetrain.Constants.AlignTargets.Test)
+        )
+
 
         if (Preferences.getBoolean("DeveloperMode", false)) {
             controllerDev.leftBumper().onTrue(Commands.runOnce(SignalLogger::start))

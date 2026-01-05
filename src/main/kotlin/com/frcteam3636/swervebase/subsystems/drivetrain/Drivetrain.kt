@@ -16,11 +16,16 @@ import com.frcteam3636.swervebase.utils.fieldRelativeTranslation2d
 import com.frcteam3636.swervebase.utils.math.*
 import com.frcteam3636.swervebase.utils.swerve.*
 import com.frcteam3636.swervebase.utils.translation2d
+import com.therekrab.autopilot.APConstraints
+import com.therekrab.autopilot.APProfile
+import com.therekrab.autopilot.APTarget
+import com.therekrab.autopilot.Autopilot
 import edu.wpi.first.math.VecBuilder
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator
 import edu.wpi.first.math.filter.SlewRateLimiter
 import edu.wpi.first.math.geometry.Pose2d
 import edu.wpi.first.math.geometry.Rotation2d
+import edu.wpi.first.math.geometry.Transform2d
 import edu.wpi.first.math.geometry.Transform3d
 import edu.wpi.first.math.geometry.Translation2d
 import edu.wpi.first.math.kinematics.ChassisSpeeds
@@ -350,6 +355,48 @@ object Drivetrain : Subsystem {
     val signals: Array<BaseStatusSignal>
         get() = io.signals
 
+    val autoPilotConstraints: APConstraints = APConstraints()
+        .withVelocity(2.0)
+        .withAcceleration(1.0)
+        .withJerk(1.0)
+
+    val autoPilotProfile: APProfile = APProfile(autoPilotConstraints)
+        .withErrorXY(2.centimeters)
+        .withErrorTheta(0.5.degrees)
+        .withBeelineRadius(8.centimeters)
+
+    val autopilot = Autopilot(autoPilotProfile)
+
+    // Make Pid gains a constant in real code
+    val autoPilotRotationPID = PIDController(PIDGains(5.0))
+
+    fun driveToPose(pose: Constants.AlignTargets): Command {
+        return run {
+            val output: Autopilot.APResult = autopilot.calculate(
+                estimatedPose,
+                measuredChassisSpeeds,
+                APTarget(pose.pose)
+            )
+
+            val rotationOutput = autoPilotRotationPID.calculate(
+                estimatedPose.rotation.radians,
+                output.targetAngle.radians
+            )
+
+            desiredChassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(
+                output.vx,
+                output.vy,
+                rotationOutput.radiansPerSecond,
+                estimatedPose.rotation
+            )
+
+        }.until {
+            autopilot.atTarget(estimatedPose, APTarget(pose.pose))
+        }.finallyDo {
+            -> desiredModuleStates = BRAKE_POSITION
+        }
+    }
+
     private fun isInDeadband(translation: Translation2d) =
         abs(translation.x) < JOYSTICK_DEADBAND && abs(translation.y) < JOYSTICK_DEADBAND
 
@@ -453,6 +500,13 @@ object Drivetrain : Subsystem {
 
     @Suppress("unused")
     object Constants {
+        // I don't like this, will fix
+        enum class AlignTargets(val pose: Pose2d){
+            Test(
+                FIELD_LAYOUT.getTagPose(7).get().toPose2d()
+                .plus(Transform2d(Translation2d((-4).feet, 0.feet), Rotation2d.kZero))
+            )
+        }
         // Translation/rotation coefficient for teleoperated driver controls
         /** Unit: Percent of max robot speed */
         const val TRANSLATION_SENSITIVITY = 1.0 // FIXME: Increase
