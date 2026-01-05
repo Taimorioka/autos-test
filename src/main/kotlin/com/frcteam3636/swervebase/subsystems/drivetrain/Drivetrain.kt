@@ -503,8 +503,7 @@ object Drivetrain : Subsystem {
         // I don't like this, will fix
         enum class AlignTargets(val pose: Pose2d){
             Test(
-                FIELD_LAYOUT.getTagPose(7).get().toPose2d()
-                .plus(Transform2d(Translation2d((-4).feet, 0.feet), Rotation2d.kZero))
+                FIELD_LAYOUT.getTagPose(7).get().toPose2d() + Transform2d(Translation2d((-4).feet, 0.feet), Rotation2d.kZero)
             )
         }
         // Translation/rotation coefficient for teleoperated driver controls
